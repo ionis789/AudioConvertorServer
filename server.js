@@ -10,6 +10,9 @@ if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir);
 }
 
+app.get("/", (req, res) => {
+  res.json("Watting for request");
+});
 app.get("/extract-audio", (req, res) => {
   const videoUrl = req.query.url;
 
