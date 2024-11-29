@@ -11,15 +11,13 @@ if (!fs.existsSync(tempDir)) {
 }
 
 app.get("/", (req, res) => {
-  res.json("Watting for request");
+  res.json("Waiting for request");
 });
+
 app.get("/extract-audio", (req, res) => {
   const videoUrl = req.query.url;
 
-  // Comanda pentru a extrage metadatele despre videoclip
   const metadataCommand = `yt-dlp --dump-json ${videoUrl}`;
-
-  // Rulăm comanda pentru a extrage metadatele
   exec(metadataCommand, (error, stdout, stderr) => {
     if (error) {
       console.error(`Error fetching metadata: ${stderr}`);
@@ -27,7 +25,6 @@ app.get("/extract-audio", (req, res) => {
       return;
     }
 
-    // Metadatele sunt returnate în stdout în format JSON
     let metadata;
     try {
       metadata = JSON.parse(stdout);
@@ -37,12 +34,11 @@ app.get("/extract-audio", (req, res) => {
       return;
     }
 
-    const title = metadata.title.replace(/[/\\?%*:|"<>]/g, ""); // Eliminăm caracterele nepermise în numele fișierului
+    const title = metadata.title.replace(/[/\\?%*:|"<>]/g, "").trim(); // Eliminăm caracterele invalide
     const audioPath = path.resolve(tempDir, `${title}.mp3`);
 
-    // Comanda pentru a descărca doar fișierul audio
-    const downloadCommand = `yt-dlp --extract-audio --audio-format mp3 -o "${audioPath}" ${videoUrl}`;
-
+    // Comanda pentru descărcarea fișierului audio cu metadate încorporate
+    const downloadCommand = `yt-dlp --extract-audio --audio-format mp3 --embed-thumbnail --add-metadata -o "${audioPath}" ${videoUrl}`;
     exec(downloadCommand, (error, stdout, stderr) => {
       if (error) {
         console.error(`Error downloading audio: ${stderr}`);
@@ -50,15 +46,12 @@ app.get("/extract-audio", (req, res) => {
         return;
       }
 
-      // Verificăm dacă fișierul audio a fost creat
       if (fs.existsSync(audioPath)) {
-        // Trimiterea fișierului audio împreună cu metadatele într-un răspuns JSON
+        // Răspuns cu datele fișierului audio
         res.setHeader("Content-Type", "application/json");
         res.json({
           title: title,
-          uploader: metadata.uploader,
-          duration: metadata.duration,
-          file: `/download-audio?file=${encodeURIComponent(title)}.mp3`,
+          audio: `/download-audio?file=${encodeURIComponent(title)}.mp3`,
         });
       } else {
         res.status(500).send("Audio file not found");
@@ -67,11 +60,12 @@ app.get("/extract-audio", (req, res) => {
   });
 });
 
-// Endpoint separat pentru descărcarea efectivă a fișierului audio
 app.get("/download-audio", (req, res) => {
   const filePath = path.resolve(tempDir, req.query.file);
   if (fs.existsSync(filePath)) {
-    res.download(filePath, req.query.file, (err) => {
+    const safeFilename = req.query.file.replace(/[^a-zA-Z0-9.\-_]/g, "_"); // Eliminăm caracterele invalide din numele fișierului
+    res.setHeader("Content-Disposition", `attachment; filename="${safeFilename}"`);
+    res.download(filePath, safeFilename, (err) => {
       if (err) {
         console.error(`Error sending audio file: ${err}`);
         res.status(500).send("Error sending audio file");
@@ -82,6 +76,6 @@ app.get("/download-audio", (req, res) => {
   }
 });
 
-app.listen(3000, () => {
-  console.log("Server is running on http://localhost:3000");
+app.listen(3000, '0.0.0.0', () => {
+  console.log("Server running on 0.0.0.0:3000");
 });
